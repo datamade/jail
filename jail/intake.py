@@ -2,9 +2,8 @@ import datetime
 import time
 import itertools
 
-import lxml.html
-import psycopg2
 import scrapelib
+import lxml.html
 
 from .parser import parse_page
 
@@ -41,7 +40,13 @@ def reports(max_missing) :
 
         time.sleep(600)
 
+def inmates(max_missing):
+    for report in reports(max_missing):
+        page = lxml.html.fromstring(report.content)
+        yield parse_page(page)
+        
 if __name__ == '__main__':
+    import psycopg2
 
     cache = scrapelib.cache.FileCache('_cache')        
     SCRAPER.cache_storage = cache
@@ -50,11 +55,8 @@ if __name__ == '__main__':
     con = psycopg2.connect(database="arrests")
     c = con.cursor()
 
-    for report in reports(20):
-        page = lxml.html.fromstring(report.content)
-        inmate = parse_page(page)
+    for inmate in inmates(max_missing=20):
         print(inmate)
-
         try:
             c.execute("INSERT INTO inmate "
                       "VALUES "
