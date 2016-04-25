@@ -1,22 +1,21 @@
-import scrapelib
-import json
 import datetime
 import time
 import itertools
+
 import lxml.html
-import re
 import psycopg2
+import scrapelib
+
 from .parser import parse_page
 
 BASE_URL = 'http://www2.cookcountysheriff.org/search2/details.asp?jailnumber='
-S = scrapelib.Scraper(requests_per_minute=60)
-
+SCRAPER = scrapelib.Scraper(requests_per_minute=60)
 
 def skip_missing(base_url, max_missing, start_count=1):
     if max_missing :
         for i in itertools.count(start_count):
             try:
-                yield i, S.get(base_url % i)
+                yield i, SCRAPER.get(base_url % i)
             except scrapelib.HTTPError as e:
                 if e.response.status_code == 500:
                     restart_count = i + 1
@@ -45,8 +44,8 @@ def reports(max_missing) :
 if __name__ == '__main__':
 
     cache = scrapelib.cache.FileCache('_cache')        
-    S.cache_storage = cache
-    S.cache_write_only = False
+    SCRAPER.cache_storage = cache
+    SCRAPER.cache_write_only = False
 
     con = psycopg2.connect(database="arrests")
     c = con.cursor()
@@ -67,6 +66,3 @@ if __name__ == '__main__':
             con.commit()
 
     con.close()
-
-
-        
