@@ -3,18 +3,18 @@ import time
 import itertools
 
 import scrapelib
-import lxml.html
 
 from .parser import parse_page
 
 BASE_URL = 'http://www2.cookcountysheriff.org/search2/details.asp?jailnumber='
 SCRAPER = scrapelib.Scraper(requests_per_minute=60)
 
-def skip_missing(base_url, max_missing, start_count=1):
-    if max_missing :
+def skip_missing(base_url, max_missing, start_count=1, retries=0):
+    if retries < max_missing :
         for i in itertools.count(start_count):
             try:
                 yield i, SCRAPER.get(base_url % i)
+                retries = 0
             except scrapelib.HTTPError as e:
                 if e.response.status_code == 500:
                     restart_count = i + 1
@@ -22,7 +22,7 @@ def skip_missing(base_url, max_missing, start_count=1):
                 else:
                     raise
 
-        yield from skip_missing(base_url, max_missing - 1, restart_count)
+        yield from skip_missing(base_url, max_missing, restart_count, retries + 1)
 
 def reports(max_missing) :
     current_day = None
@@ -40,10 +40,10 @@ def reports(max_missing) :
 
         time.sleep(600)
 
+
 def inmates(max_missing):
     for report in reports(max_missing):
-        page = lxml.html.fromstring(report.content)
-        yield parse_page(page)
+        yield parse_page(report)
         
 if __name__ == '__main__':
     import psycopg2
@@ -66,5 +66,18 @@ if __name__ == '__main__':
             con.rollback()
         else:
             con.commit()
+
+        try:
+            c.execute("INSERT INTO poll "
+                      "(inmate_id, status, checked) "
+                      "VALUES "
+                      "(%(id)s, 200, now())",
+                      inmate)
+        except psycopg2.IntegrityError:
+            con.rollback()
+        else:
+            con.commit()
+            
+        
 
     con.close()
