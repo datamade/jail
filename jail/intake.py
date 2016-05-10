@@ -3,11 +3,13 @@ import time
 import itertools
 
 import scrapelib
+import pytz
 
 from .parser import parse_page
 
 BASE_URL = 'http://www2.cookcountysheriff.org/search2/details.asp?jailnumber='
 SCRAPER = scrapelib.Scraper(requests_per_minute=60)
+CT = pytz.timezone('America/Chicago')
 
 def skip_missing(base_url, max_missing, start_count=1, retries=0):
     if retries < max_missing :
@@ -27,7 +29,7 @@ def skip_missing(base_url, max_missing, start_count=1, retries=0):
 def reports(max_missing) :
     current_day = None
     while True:
-        today = datetime.date.today() 
+        today = CT.localize(datetime.datetime.utcnow()).date()
         if today != current_day:
             current_day = today
             jail_number = today.strftime('%Y-%m%d') + "%03d"
