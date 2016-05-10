@@ -7,7 +7,9 @@ SCRAPER = scrapelib.Scraper(requests_per_minute=60)
 
 if __name__ == '__main__':
     import psycopg2
-    
+    from raven import Client
+    from .sentry import DSN
+    client = Client(DSN)
     
     con = psycopg2.connect(database="arrests")
     c = con.cursor()
@@ -35,7 +37,11 @@ if __name__ == '__main__':
                               (inmate_id,))
                     con.commit()
                 else:
+                    client.captureException()
                     raise
+            except:
+                client.captureException()
+                raise
             else:
                 c.execute("INSERT INTO poll "
                           "(inmate_id, status, checked) "

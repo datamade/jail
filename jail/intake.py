@@ -47,6 +47,9 @@ def inmates(max_missing):
         
 if __name__ == '__main__':
     import psycopg2
+    from raven import Client
+    from .sentry import DSN
+    client = Client(DSN)
 
     cache = scrapelib.cache.FileCache('_cache')        
     SCRAPER.cache_storage = cache
@@ -64,6 +67,9 @@ if __name__ == '__main__':
                       inmate)
         except psycopg2.IntegrityError:
             con.rollback()
+        except:
+            client.captureException()
+            raise
         else:
             con.commit()
 
@@ -75,6 +81,9 @@ if __name__ == '__main__':
                       inmate)
         except psycopg2.IntegrityError:
             con.rollback()
+        except:
+            client.captureException()
+            raise
         else:
             con.commit()
             
