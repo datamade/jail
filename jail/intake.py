@@ -29,7 +29,7 @@ def skip_missing(base_url, max_missing, start_count=1, retries=0):
 def reports(max_missing) :
     current_day = None
     while True:
-        today = CT.localize(datetime.datetime.utcnow()).date()
+        today = datetime.datetime.now(CT).date()
         if today != current_day:
             current_day = today
             jail_number = today.strftime('%Y-%m%d') + "%03d"
