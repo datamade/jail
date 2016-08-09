@@ -5,6 +5,101 @@ from .parser import parse_page
 BASE_URL = 'http://www2.cookcountysheriff.org/search2/details.asp?jailnumber='
 SCRAPER = scrapelib.Scraper(requests_per_minute=60)
 
+def load_inmate(c, poll_id, inmate):
+    inmate['poll id'] = poll_id
+
+
+    if inmate['charges']:
+        c.execute("SELECT * "
+                  "FROM (SELECT DISTINCT ON (inmate_id) * "
+                  "      FROM inmate_charges "
+                  "      WHERE inmate_id = %s "
+                  "      ORDER BY inmate_id, poll_id DESC) last_charge "
+                  "WHERE statute=%s",
+                  (inmate['id'],
+                   inmate['charges'][0]))
+        if c.fetchone() is None:
+            c.execute("INSERT INTO inmate_charges "
+                      "VALUES "
+                      "(%s, %s, %s, %s)",
+                      (inmate['poll id'],
+                       inmate['id'],
+                       inmate['charges'][0],
+                       inmate['charges'][1]))
+
+    if inmate['bail amount']:
+        c.execute("SELECT * "
+                  "FROM (SELECT DISTINCT ON (inmate_id) * "
+                  "      FROM inmate_bond "
+                  "      WHERE inmate_id = %(id)s "
+                  "      ORDER BY inmate_id, poll_id DESC) last_bond "
+                  "WHERE amount = %(bail amount)s",
+                  inmate)
+        if c.fetchone() is None:
+            c.execute("INSERT INTO inmate_bond "
+                      "VALUES "
+                      "(%(poll id)s, %(id)s, %(bail amount)s)",
+                      inmate)
+    elif inmate['bail status']:
+        c.execute("SELECT * "
+                  "FROM (SELECT DISTINCT ON (inmate_id) * "
+                  "      FROM inmate_bond "
+                  "      WHERE inmate_id = %(id)s "
+                  "      ORDER BY inmate_id, poll_id DESC) last_bond_status "
+                  "WHERE status = %(bail status)s",
+                  inmate)
+        if c.fetchone() is None:
+            c.execute("INSERT INTO inmate_bond "
+                      "(poll_id, inmate_id, status) "
+                      "VALUES "
+                      "(%(poll id)s, %(id)s, %(bail status)s)",
+                      inmate)
+
+    if inmate['next court date']:
+        c.execute("SELECT * "
+                  "FROM court_date "
+                  "WHERE inmate_id = %(id)s "
+                  "  AND date = %(next court date)s "
+                  "  AND location = %(courthouse location)s",
+                  inmate)
+        if c.fetchone() is None:
+            c.execute("INSERT INTO court_date "
+                      "VALUES "
+                      "(%(poll id)s, %(id)s, %(next court date)s, %(courthouse location)s)",
+                      inmate)
+
+    if not inmate['visiting information'].startswith('Call for Visit Info'):
+        c.execute("SELECT * "
+                  "FROM (SELECT DISTINCT ON (inmate_id) * "
+                  "      FROM visitation "
+                  "      WHERE inmate_id = %(id)s "
+                  "      ORDER BY inmate_id, poll_id DESC) last_visiting_info "
+                  "WHERE visitation = %(visiting information)s",
+                  inmate)
+        if c.fetchone() is None:
+            c.execute("INSERT INTO visitation "
+                      "VALUES "
+                      "(%(poll id)s, %(id)s, %(visiting information)s)",
+                      inmate)
+
+
+    if inmate['housing location']:
+        c.execute("SELECT * "
+                  "FROM (SELECT DISTINCT ON (inmate_id) * "
+                  "      FROM jail_location "
+                  "      WHERE inmate_id = %(id)s "
+                  "      ORDER BY inmate_id, poll_id DESC) last_housing "
+                  "WHERE location = %(housing location)s",
+                  inmate)
+        if c.fetchone() is None:
+            c.execute("INSERT INTO jail_location "
+                      "VALUES "
+                      "(%(poll id)s, %(id)s, %(housing location)s)",
+                      inmate)
+
+
+
+
 if __name__ == '__main__':
     import psycopg2
     from raven import Client
@@ -22,123 +117,41 @@ if __name__ == '__main__':
                   "      ORDER BY inmate_id, checked DESC) as last_checked "
                   "WHERE status = 200 "
                   "ORDER BY checked ASC")
+
         for row in c.fetchall():
             
             inmate_id = row[0]
             print(inmate_id)
+
+            inmate_present = None
+
             try:
                 report = SCRAPER.get(BASE_URL + inmate_id)
             except scrapelib.HTTPError as e:
                 if e.response.status_code == 500:
-                    c.execute("INSERT INTO poll "
-                              "(inmate_id, status, checked) "
-                              "VALUES "
-                              "(%s, 500, now())",
-                              (inmate_id,))
-                    con.commit()
+                    inmate_present = False
                 else:
                     client.captureException()
                     raise
-            except:
-                client.captureException()
-                raise
             else:
-                c.execute("INSERT INTO poll "
-                          "(inmate_id, status, checked) "
-                          "VALUES "
-                          "(%s, 200, now()) "
-                          "RETURNING poll_id",
-                          (inmate_id,))
+                inmate_present = True
 
-                inmate = parse_page(report)
+            c.execute("INSERT INTO poll "
+                      "(inmate_id, status, checked) "
+                      "VALUES "
+                      "(%s, %s, now()) "
+                      "RETURNING poll_id",
+                      (inmate_id, 200 if inmate_present else 500))
+            con.commit()
 
-                inmate['poll id'] = c.fetchone()[0]
+            if not inmate_present:
+                continue
 
+            poll_id = c.fetchone()[0]
+            inmate = parse_page(report)
 
-                if inmate['charges']:
-                    c.execute("SELECT * "
-                              "FROM inmate_charges "
-                              "WHERE inmate_id = %s "
-                              "    AND statute=%s",
-                              (inmate['id'],
-                               inmate['charges'][0]))
-                    if c.fetchone() is None:
-                        c.execute("INSERT INTO inmate_charges "
-                                  "VALUES "
-                                  "(%s, %s, %s, %s)",
-                                  (inmate['poll id'],
-                                   inmate['id'],
-                                   inmate['charges'][0],
-                                   inmate['charges'][1]))
+            load_inmate(c, poll_id, inmate)
 
-                if inmate['bail amount']:
-                    c.execute("SELECT * "
-                              "FROM inmate_bond "
-                              "WHERE inmate_id = %(id)s "
-                              "    AND amount = %(bail amount)s ",
-                              inmate)
-                    if c.fetchone() is None:
-                        c.execute("INSERT INTO inmate_bond "
-                                  "VALUES "
-                                  "(%(poll id)s, %(id)s, %(bail amount)s)",
-                                  inmate)
-                elif inmate['bail status']:
-                    c.execute("SELECT * "
-                              "FROM inmate_bond "
-                              "WHERE inmate_id = %(id)s "
-                              "    AND status = %(bail status)s",
-                              inmate)
-                    if c.fetchone() is None:
-                        c.execute("INSERT INTO inmate_bond "
-                                  "(poll_id, inmate_id, status) "
-                                  "VALUES "
-                                  "(%(poll id)s, %(id)s, %(bail status)s)",
-                                  inmate)
-
-
-                if inmate['next court date']:
-                    c.execute("SELECT * "
-                              "FROM court_date "
-                              "WHERE inmate_id = %(id)s "
-                              "    AND date = %(next court date)s "
-                              "    AND location = %(courthouse location)s",
-                              inmate)
-                    if c.fetchone() is None:
-                        c.execute("INSERT INTO court_date "
-                                  "VALUES "
-                                  "(%(poll id)s, %(id)s, %(next court date)s, %(courthouse location)s)",
-                                  inmate)
-
-                if not inmate['visiting information'].startswith('Call for Visit Info'):
-                    c.execute("SELECT * "
-                              "FROM visitation "
-                              "WHERE inmate_id = %(id)s "
-                              "    AND visitation = %(visiting information)s",
-                              inmate)
-                    if c.fetchone() is None:
-                        c.execute("INSERT INTO visitation "
-                                  "VALUES "
-                                  "(%(poll id)s, %(id)s, %(visiting information)s)",
-                                  inmate)
-                        
-                    
-                if inmate['housing location']:
-                    c.execute("SELECT * "
-                              "FROM jail_location "
-                              "WHERE inmate_id = %(id)s "
-                              "    AND location = %(housing location)s",
-                              inmate)
-                    if c.fetchone() is None:
-                        c.execute("INSERT INTO jail_location "
-                                  "VALUES "
-                                  "(%(poll id)s, %(id)s, %(housing location)s)",
-                                  inmate)
-                        
-
-                    
-                    
-                con.commit()
-
-                          
+            con.commit()
             
     con.close()

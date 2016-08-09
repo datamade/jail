@@ -6,6 +6,7 @@ import scrapelib
 import pytz
 
 from .parser import parse_page
+from .poll import load_inmate
 
 BASE_URL = 'http://www2.cookcountysheriff.org/search2/details.asp?jailnumber='
 SCRAPER = scrapelib.Scraper(requests_per_minute=60)
@@ -62,33 +63,27 @@ if __name__ == '__main__':
 
     for inmate in inmates(max_missing=20):
         print(inmate)
-        try:
-            c.execute("INSERT INTO inmate "
-                      "VALUES "
-                      "(%(id)s, %(name)s, %(dob)s, %(race)s, %(sex)s, %(height)s, %(weight)s, %(booked date)s)",
-                      inmate)
-        except psycopg2.IntegrityError:
-            con.rollback()
-        except:
-            client.captureException()
-            raise
-        else:
-            con.commit()
-
-        try:
-            c.execute("INSERT INTO poll "
-                      "(inmate_id, status, checked) "
-                      "VALUES "
-                      "(%(id)s, 200, now())",
-                      inmate)
-        except psycopg2.IntegrityError:
-            con.rollback()
-        except:
-            client.captureException()
-            raise
-        else:
-            con.commit()
-            
+        c.execute("INSERT INTO inmate "
+                  "VALUES "
+                  "(%(id)s, %(name)s, %(dob)s, %(race)s, %(sex)s, "
+                  "%(height)s, %(weight)s, %(booked date)s) "
+                  "ON CONFLICT DO NOTHING",
+                  inmate)
         
+        c.execute("INSERT INTO poll "
+                  "(inmate_id, status, checked) "
+                  "VALUES "
+                  "(%(id)s, 200, now()) "
+                  "RETURNING poll_id",
+                  inmate)
+
+        poll_id = c.fetchone()[0]
+
+        con.commit()
+
+        load_inmate(c, poll_id, inmate)
+
+        con.commit()
+
 
     con.close()
