@@ -106,8 +106,8 @@ def interleave_priority(all_records, c):
                       "GROUP BY inmate_id "
                       "HAVING BOOL_AND(status=200) "
                       "ORDER BY "
-                      "(EXTRACT(epoch FROM NOW() - min(checked))/ "
-                      " EXTRACT(epoch FROM NOW())) DESC "
+                      "(EXTRACT(epoch FROM NOW() - max(checked))/ "
+                      " EXTRACT(epoch FROM NOW() - min(checked))) DESC "
                       "LIMIT 1")
             inmate_id = c.fetchone()[0]
             all_records -= {inmate_id}
