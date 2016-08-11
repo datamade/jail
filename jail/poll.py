@@ -108,7 +108,8 @@ def interleave_priority(all_records, c):
                       "USING (inmate_id) "
                       "GROUP BY inmate_id "
                       "HAVING BOOL_AND(poll.status=200) "
-                      "   AND BOOL_AND(inmate_bond.status = '*NO BOND*') "
+                      "   AND BOOL_AND(inmate_bond.status = '*NO BOND*' "
+                      "                AND inmate_bond.status IS NOT NULL) "
                       "   AND NOW() - MIN(checked) < INTERVAL '1 days'")
             recent_records = {row[0] for row in c}
             all_records -= recent_records
