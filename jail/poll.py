@@ -3,7 +3,7 @@ import scrapelib
 from .parser import parse_page
 
 BASE_URL = 'http://www2.cookcountysheriff.org/search2/details.asp?jailnumber='
-SCRAPER = scrapelib.Scraper(requests_per_minute=60)
+SCRAPER = scrapelib.Scraper(requests_per_minute=120)
 
 def load_inmate(c, poll_id, inmate):
     inmate['poll id'] = poll_id
@@ -103,8 +103,11 @@ def interleave_priority(all_records, c):
         if i % 2 == 0:
             c.execute("SELECT inmate_id "
                       "FROM poll "
+                      "INNER JOIN inmate_bond "
+                      "USING (inmate_id) "
                       "GROUP BY inmate_id "
-                      "HAVING BOOL_AND(status=200) "
+                      "HAVING BOOL_AND(poll.status=200) "
+                      "HAVING BOOL_AND(inmate_bond.status = '*NO BOND*') "
                       "ORDER BY "
                       "(EXTRACT(epoch FROM NOW() - max(checked))/ "
                       " EXTRACT(epoch FROM NOW() - min(checked))) DESC "
