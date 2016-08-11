@@ -111,13 +111,12 @@ def interleave_priority(all_records, c):
                       "   AND BOOL_AND(inmate_bond.status = '*NO BOND*') "
                       "   AND NOW() - MIN(checked) < INTERVAL '1 days'")
             recent_records = {row[0] for row in c}
+            all_records -= recent_records
 
         if i % 2 == 0 and recent_records:
             inmate_id = recent_records.pop()
-            all_records -= {inmate_id}
         else:
             inmate_id = all_records.pop()
-            recent_records -= {inmate_id}
 
         yield inmate_id
 
