@@ -107,7 +107,7 @@ def interleave_priority(all_records, c):
                       "USING (inmate_id) "
                       "GROUP BY inmate_id "
                       "HAVING BOOL_AND(poll.status=200) "
-                      "HAVING BOOL_AND(inmate_bond.status = '*NO BOND*') "
+                      "   AND BOOL_AND(inmate_bond.status = '*NO BOND*') "
                       "ORDER BY "
                       "(EXTRACT(epoch FROM NOW() - max(checked))/ "
                       " EXTRACT(epoch FROM NOW() - min(checked))) DESC "
