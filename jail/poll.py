@@ -97,8 +97,25 @@ def load_inmate(c, poll_id, inmate):
                       "(%(poll id)s, %(id)s, %(housing location)s)",
                       inmate)
 
+def interleave_priority(all_records, c):
+    i = 0
+    while all_records:
+        if i % 2 == 0:
+            c.execute("SELECT inmate_id "
+                      "FROM poll "
+                      "GROUP BY inmate_id "
+                      "HAVING BOOL_AND(status=200) "
+                      "ORDER BY "
+                      "(EXTRACT(epoch FROM NOW() - min(checked))/ "
+                      " EXTRACT(epoch FROM NOW())) DESC "
+                      "LIMIT 1")
+            inmate_id = c.fetchone()[0]
+            all_records -= {inmate_id}
+            yield inmate_id
+        else:
+            yield all_records.pop()
 
-
+        i += 1
 
 if __name__ == '__main__':
     import psycopg2
@@ -111,16 +128,13 @@ if __name__ == '__main__':
 
     while True:
         c.execute("SELECT inmate_id "
-                  "FROM (SELECT DISTINCT ON (inmate_id) "
-                  "      inmate_id, status, checked "
-                  "      FROM poll "
-                  "      ORDER BY inmate_id, checked DESC) as last_checked "
-                  "WHERE status = 200 "
-                  "ORDER BY checked ASC")
+                  "FROM poll "
+                  "GROUP BY inmate_id "
+                  "HAVING BOOL_AND(status = 200)")
 
-        for row in c.fetchall():
+        all_records = {row[0] for row in c.fetchall()}
+        for inmate_id in interleave_priority(all_records, c):
             
-            inmate_id = row[0]
             print(inmate_id)
 
             inmate_present = None
