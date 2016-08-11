@@ -99,8 +99,9 @@ def load_inmate(c, poll_id, inmate):
 
 def interleave_priority(all_records, c):
     i = 0
+    recent_records = set()
     while all_records:
-        if i % 2 == 0:
+        if not recent_records:
             c.execute("SELECT inmate_id "
                       "FROM poll "
                       "INNER JOIN inmate_bond "
@@ -108,12 +109,11 @@ def interleave_priority(all_records, c):
                       "GROUP BY inmate_id "
                       "HAVING BOOL_AND(poll.status=200) "
                       "   AND BOOL_AND(inmate_bond.status = '*NO BOND*') "
-                      "   AND NOW() - MIN(checked) < INTERVAL '1 days' "
-                      "ORDER BY "
-                      "(EXTRACT(epoch FROM NOW() - max(checked))/ "
-                      " EXTRACT(epoch FROM NOW() - min(checked) + INTERVAL '5 minutes')) DESC "
-                      "LIMIT 1")
-            inmate_id = c.fetchone()[0]
+                      "   AND NOW() - MIN(checked) < INTERVAL '1 days'")
+            recent_records = {row[0] for row in c}
+
+        if i % 2 == 0 and recent_records:
+            inmate_id = recent_records.pop()
             all_records -= {inmate_id}
             yield inmate_id
         else:
