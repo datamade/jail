@@ -115,7 +115,6 @@ def interleave_priority(all_records, c):
         if i % 2 == 0 and recent_records:
             inmate_id = recent_records.pop()
             all_records -= {inmate_id}
-            yield inmate_id
         else:
             inmate_id = all_records.pop()
             recent_records -= {inmate_id}
