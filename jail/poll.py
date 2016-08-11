@@ -108,6 +108,7 @@ def interleave_priority(all_records, c):
                       "GROUP BY inmate_id "
                       "HAVING BOOL_AND(poll.status=200) "
                       "   AND BOOL_AND(inmate_bond.status = '*NO BOND*') "
+                      "   AND NOW() - MIN(checked) < Interval '2 days' "
                       "ORDER BY "
                       "(EXTRACT(epoch FROM NOW() - max(checked))/ "
                       " EXTRACT(epoch FROM NOW() - min(checked))) DESC "
@@ -122,9 +123,12 @@ def interleave_priority(all_records, c):
 
 if __name__ == '__main__':
     import psycopg2
-    from raven import Client
-    from .sentry import DSN
-    client = Client(DSN)
+    try:
+        from raven import Client
+        from .sentry import DSN
+        client = Client(DSN)
+    except ImportError:
+        pass
     
     con = psycopg2.connect(database="arrests")
     c = con.cursor()
