@@ -117,7 +117,10 @@ def interleave_priority(all_records, c):
             all_records -= {inmate_id}
             yield inmate_id
         else:
-            yield all_records.pop()
+            inmate_id = all_records.pop()
+            recent_records -= {inmate_id}
+
+        yield inmate_id
 
         i += 1
 
